@@ -20,7 +20,7 @@ test('Completed files restart; short saved positions and zero remain valid',()=>
  assert.equal(resumePosition(0,60),0);assert.equal(resumePosition(Infinity,60),0);
  assert.equal(formatTime(3661),'61:01');
 });
-test('Visible order and filters share playback ordering',()=>{
+test('Default library order is newest first; learned filter remains available',()=>{
  const rows=[{id:'a',priority:false,playCount:10,addedAt:1},{id:'b',priority:true,playCount:2,addedAt:2}];
  assert.deepEqual(visibleTracks(rows,'all').map(t=>t.id),['b','a']);
  assert.deepEqual(visibleTracks(rows,'mastered').map(t=>t.id),['a']);
@@ -29,7 +29,7 @@ test('CRC-32 matches standard vector',async()=>assert.equal(await checksum(new B
 test('Backup roundtrip preserves audio bytes and metadata; identifiers remapped',async()=>{
  const file=await createBackup(fixture);const result=await readBackup(file);
  assert.equal(result.tracks[0].title,'Lesson');assert.equal(result.tracks[0].note,'a < b & c');
- assert.equal(result.tracks[0].lastPosition,12);assert.equal(result.tracks[0].folderId,result.folders[0].id);
+ assert.equal(result.tracks[0].lastPosition,12);assert.equal(result.tracks[0].folderIds[0],result.folders[0].id);
  assert.notEqual(result.tracks[0].id,'track');assert.notEqual(result.folders[0].id,'folder');
  assert.deepEqual(new Uint8Array(await result.audio[0].blob.arrayBuffer()),new Uint8Array(await blob.arrayBuffer()));
  const second=await readBackup(file);assert.notEqual(second.tracks[0].id,result.tracks[0].id);

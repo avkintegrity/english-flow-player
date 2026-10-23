@@ -19,196 +19,38 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-top">
-        <h1 class="app-title">English Flow</h1>
-        <div class="header-actions"><button id="btn-settings" class="btn-icon" aria-label="Хранение и резервная копия">⚙</button>
-        <button id="btn-add" class="btn-icon" data-library-action disabled title="Добавить аудио" aria-label="Добавить аудио">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-        </button></div>
-      </div>
-      
-      <!-- Filters -->
-      <div class="filters">
-        <button class="filter-btn active" data-filter="all">Все</button>
-        <button class="filter-btn" data-filter="review">Нужно переслушать</button>
-        <button class="filter-btn" data-filter="mastered">Хорошо</button>
-        <button class="filter-btn" data-filter="folders">Папки</button>
-      </div>
-    </header>
-
-    <div id="status" role="status" aria-live="polite"></div>
-    <div id="update-banner" class="update-banner hidden">Доступно обновление <button id="btn-update">Сохранить и обновить</button></div>
-    <!-- Main content -->
-    <main id="main-content" class="main-content">
-      <!-- Tracks list -->
-      <div id="tracks-view" class="view active">
-        <div id="folder-view-heading" class="hidden"><button id="btn-back-folders" class="btn-secondary">← Папки</button><h2 id="folder-view-name"></h2></div>
-        <div id="tracks-list" class="tracks-list">
-          <!-- Tracks will be rendered here -->
-        </div>
-        <div id="empty-state" class="empty-state">
-          <div class="empty-icon">🎧</div>
-          <p id="empty-title">Пока нет аудио</p>
-          <p class="empty-hint">Нажмите + и выберите аудио из «Файлов»: MP3, M4A, WAV и другие поддерживаемые форматы.</p>
-        </div>
-      </div>
-
-      <!-- Folders view -->
-      <div id="folders-view" class="view">
-        <div class="folders-header">
-          <button id="btn-create-folder" data-library-action disabled class="btn-primary">+ Создать папку</button>
-          <button id="btn-play-selected" class="btn-secondary hidden" style="margin-top:8px;">▶ Слушать выбранные</button>
-        </div>
-        <div id="folders-list" class="folders-list"></div>
-      </div>
-    </main>
-
-    <!-- Modal: Assign track to folder -->
-    <div id="modal-folder" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-folder-title">
-      <div class="modal-content">
-        <h3 id="modal-folder-title">Добавить в папку</h3>
-        <div id="modal-folder-list" class="modal-list"></div>
-        <button id="btn-modal-close" class="btn-secondary" style="margin-top:12px;">Закрыть</button>
-      </div>
-    </div>
-
-    <!-- Modal: Create / rename folder -->
-    <div id="modal-create-folder" class="modal hidden" role="dialog" aria-modal="true" aria-label="Новая папка">
-      <div class="modal-content">
-        <h3>Новая папка</h3>
-        <input type="text" id="folder-name-input" maxlength="100" aria-label="Название папки" placeholder="Название папки" class="text-input" />
-        <div style="display:flex;gap:8px;margin-top:12px;">
-          <button id="btn-folder-cancel" class="btn-secondary" style="flex:1;">Отмена</button>
-          <button id="btn-folder-save" class="btn-primary" style="flex:1;">Создать</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Now Playing (mini + full) -->
-    <div id="player-bar" class="player-bar hidden">
-      <div class="player-mini" id="player-mini">
-        <div class="mini-info">
-          <div class="mini-title" id="mini-title">—</div>
-          <div class="mini-meta" id="mini-meta"></div>
-        </div>
-        <div class="mini-controls">
-          <button id="btn-mini-play" aria-label="Воспроизвести" class="btn-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Full Player Overlay -->
-    <div id="full-player" class="full-player hidden">
-      <div class="full-player-content">
-        <button id="btn-close-player" aria-label="Закрыть плеер" class="btn-close">✕</button>
-        
-        <div class="player-art">
-          <div class="art-placeholder">🎧</div>
-        </div>
-        
-        <h2 id="full-title" class="full-title">—</h2>
-        <div id="full-meta" class="full-meta"></div>
-        <button id="btn-player-edit" class="btn-secondary player-edit">Изменить запись</button>
-        
-        <!-- Progress -->
-        <div class="progress-section">
-          <input type="range" id="seek-bar" aria-label="Позиция воспроизведения" class="seek-bar" min="0" max="100" value="0" />
-          <div class="time-row">
-            <span id="current-time">0:00</span>
-            <span id="duration">0:00</span>
-          </div>
-        </div>
-        
-        <!-- Main controls -->
-        <div class="main-controls">
-          <button id="btn-prev" aria-label="Предыдущая запись" class="btn-control">⏮</button>
-          <button id="btn-rewind" aria-label="Назад на 15 секунд" class="btn-control">-15</button>
-          <button id="btn-play" aria-label="Воспроизвести" class="btn-play">▶</button>
-          <button id="btn-forward" aria-label="Вперёд на 15 секунд" class="btn-control">+15</button>
-          <button id="btn-next" aria-label="Следующая запись" class="btn-control">⏭</button>
-        </div>
-        
-        <!-- Speed & Loop -->
-        <div class="extra-controls">
-          <div class="speed-control">
-            <label for="speed-select">Скорость</label>
-            <select id="speed-select">
-              <option value="0.75">0.75×</option>
-              <option value="1" selected>1×</option>
-              <option value="1.25">1.25×</option>
-              <option value="1.5">1.5×</option>
-              <option value="1.75">1.75×</option>
-              <option value="2">2×</option>
-            </select>
-          </div>
-          
-          <div class="loop-control">
-            <button id="btn-loop" class="btn-loop" data-mode="none" title="Повтор">
-              🔁
-            </button>
-            <span id="loop-label">Выкл</span>
-          </div>
-        </div>
-        
-        <!-- Priority & Notes -->
-        <div class="learning-controls">
-          <button id="btn-priority" class="btn-action">
-            <span id="priority-icon">☆</span> Приоритет
-          </button>
-          <button id="btn-note" class="btn-action">📝 Заметка</button>
-        </div>
-        
-        <div id="note-area" class="note-area hidden">
-          <textarea id="note-input" maxlength="20000" aria-label="Заметка к записи" placeholder="Незнакомые слова, фразы..."></textarea>
-          <p id="note-status" role="status"></p>
-          <button id="btn-save-note" class="btn-primary">Сохранить</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="modal-edit-track" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="edit-title">
-      <div class="modal-content">
-        <h3 id="edit-title">Изменить запись</h3>
-        <label for="track-name-input">Название</label>
-        <input id="track-name-input" class="text-input" maxlength="200" />
-        <button id="btn-rename" class="btn-primary">Сохранить название</button>
-        <button id="btn-edit-folder" class="btn-secondary">Переместить в папку</button>
-        <button id="btn-delete-track" class="btn-secondary danger">Удалить запись</button>
-        <button id="btn-edit-close" class="btn-secondary">Закрыть</button>
-      </div>
-    </div>
-    <div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div class="modal-content settings-content">
-        <h3 id="settings-title">Хранение и резервная копия</h3>
-        <p id="offline-status" role="status">Подготовка офлайн-режима…</p>
-        <p id="storage-status"></p>
-        <button id="btn-persist" class="btn-secondary" data-library-action disabled>Запросить устойчивое хранение</button>
-        <p>Аудио и заметки остаются на этом устройстве. Очистка данных сайта или удаление приложения может удалить библиотеку. Регулярно сохраняйте копию в «Файлы» или iCloud Drive.</p>
-        <button id="btn-export" class="btn-primary" data-library-action disabled>Подготовить резервную копию</button>
-        <div id="backup-ready" class="hidden">
-          <p id="backup-size"></p>
-          <button id="btn-download-backup" class="btn-primary">Сохранить файл .efp</button>
-          <button id="btn-share-backup" class="btn-secondary">Поделиться / сохранить в «Файлы»</button>
-        </div>
-        <button id="btn-import-backup" class="btn-secondary" data-library-action disabled>Восстановить из файла .efp</button>
-        <p>Копия включает аудио, названия, папки, заметки и позиции. Восстановление добавляет новые записи. Держите приложение открытым до завершения операции.</p>
-        <details><summary>Установка на iPhone</summary><p>Откройте опубликованную ссылку в Safari → «Поделиться» → «На экран Домой» → «Добавить». Запустите приложение с иконки и уже в нём добавьте аудио кнопкой +. Дождитесь готовности офлайн-режима.</p></details>
-        <button id="btn-settings-close" class="btn-secondary">Закрыть</button>
-      </div>
-    </div>
-    <audio id="audio" preload="metadata" playsinline></audio>
-    <!-- Hidden file input -->
-    <input type="file" id="file-input" accept="audio/*,.mp3,.m4a,.mp4,.wav,.wave,.aac,.aiff,.aif,.caf,.flac,.ogg,.oga,.opus,.webm" multiple hidden />
-  </div>
-
-  <input type="file" id="backup-input" accept=".efp,application/octet-stream" hidden />
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+<div id="app">
+<header class="header">
+ <div class="header-top"><h1 class="app-title"><button id="btn-language" data-i18n-aria="language">English Flow <small id="language-indicator">RU</small></button></h1><div class="header-actions"><button id="btn-settings" class="btn-icon" data-i18n-aria="settings">⚙</button><button id="btn-add" class="btn-icon" data-library-action disabled data-i18n-aria="addAudio">＋</button></div></div>
+ <nav class="filters" data-i18n-aria="library"><button class="filter-btn active" data-filter="all" data-i18n="all"></button><button class="filter-btn" data-filter="review" data-i18n="review"></button><button class="filter-btn" data-filter="mastered" data-i18n="mastered"></button><button class="filter-btn" data-filter="priority" data-i18n="priorityTab"></button><button class="filter-btn" data-filter="folders" data-i18n="folders"></button></nav>
+</header>
+<div id="status" role="status" aria-live="polite"></div>
+<div id="update-banner" class="update-banner hidden"><span data-i18n="updateAvailable"></span> <button id="btn-update" data-i18n="update"></button></div>
+<main id="main-content" class="main-content">
+ <section id="tracks-view" class="view active">
+  <div id="folder-view-heading" class="hidden"><button id="btn-back-folders" class="btn-secondary" data-i18n="backFolders"></button><h2 id="folder-view-name"></h2></div>
+  <div id="selection-header" class="selection-header hidden"><strong id="selection-count" aria-live="polite"></strong><button id="btn-select-all" class="btn-secondary" data-i18n="selectAll"></button><button id="btn-selection-close" class="btn-icon" data-i18n-aria="exitSelection">✕</button></div>
+  <div class="list-tools"><button id="btn-list-play" class="btn-primary" data-i18n="playList"></button><button id="btn-shuffle" class="btn-secondary" aria-pressed="false" data-i18n="shuffle"></button><label><span data-i18n="listRepeat"></span><select id="list-repeat" data-i18n-aria="listRepeat"><option value="1" data-i18n="once"></option><option value="2" data-i18n="twice"></option><option value="3" data-i18n="thrice"></option><option value="0" data-i18n="forever"></option></select></label></div>
+  <p id="queue-status" class="subtle" aria-live="polite"></p><p id="repeat-conflict" class="subtle hidden" data-i18n="oneConflict"></p>
+  <div class="list-toolbar"><label class="sort-label"><span data-i18n="sort"></span><select id="sort-select" data-i18n-aria="sort"><option value="newest" data-i18n="newest"></option><option value="oldest" data-i18n="oldest"></option><option value="largest" data-i18n="largest"></option><option value="smallest" data-i18n="smallest"></option><option value="least" data-i18n="least"></option><option value="most" data-i18n="most"></option></select></label><button id="btn-select" class="btn-secondary" data-i18n="select"></button></div>
+  <div id="tracks-list" class="tracks-list"></div>
+  <div id="empty-state" class="empty-state"><div class="empty-icon">🎧</div><p id="empty-title"></p><p class="empty-hint" data-i18n="addHint"></p></div>
+ </section>
+ <section id="folders-view" class="view"><div class="folders-header"><button id="btn-create-folder" class="btn-primary" data-library-action disabled data-i18n="createFolder"></button><button id="btn-play-selected" class="btn-secondary hidden" data-i18n="playSelected"></button></div><div id="folders-list" class="folders-list"></div></section>
+</main>
+<div id="batch-actions" class="batch-actions hidden"><button id="btn-batch-folders" class="btn-primary" data-i18n="folders"></button><button id="btn-batch-priority" class="btn-secondary" data-i18n="addPriority"></button><button id="btn-batch-unpriority" class="btn-secondary" data-i18n="removePriority"></button><button id="btn-batch-delete" class="btn-secondary danger" data-i18n="delete"></button></div>
+<div id="player-bar" class="player-bar hidden"><div class="player-mini" id="player-mini"><button class="mini-info" id="mini-open" data-i18n-aria="open"><span class="mini-title" id="mini-title">—</span></button><button id="btn-mini-play" class="btn-play" data-i18n-aria="play">▶</button></div><input type="range" id="mini-seek" class="seek-bar" min="0" max="100" step="0.01" value="0" data-i18n-aria="position"><div class="time-row"><span id="mini-current">0:00</span><span id="mini-duration">0:00</span></div></div>
+<div id="full-player" class="modal full-player hidden" role="dialog" aria-modal="true" aria-labelledby="full-title"><div class="modal-content full-player-content"><button class="sheet-handle" data-i18n-aria="dragClose"></button><button id="btn-close-player" class="btn-close" data-i18n-aria="closePlayer">✕</button><div class="player-art">🎧</div><h2 id="full-title" class="full-title">—</h2><p id="full-meta" class="full-meta"></p><button id="btn-player-edit" class="btn-secondary player-edit" data-i18n="edit"></button>
+ <div class="progress-section"><input type="range" id="seek-bar" class="seek-bar" min="0" max="100" step="0.01" value="0" data-i18n-aria="position"><div class="time-row"><span id="current-time">0:00</span><span id="duration">0:00</span></div></div>
+ <div class="main-controls"><button id="btn-prev" class="btn-control" data-i18n-aria="previous">⏮</button><button id="btn-rewind" class="btn-control" data-i18n-aria="rewind">−15</button><button id="btn-play" class="btn-play" data-i18n-aria="play">▶</button><button id="btn-forward" class="btn-control" data-i18n-aria="forward">+15</button><button id="btn-next" class="btn-control" data-i18n-aria="next">⏭</button></div>
+ <div class="extra-controls"><label class="speed-control"><span data-i18n="speed"></span><select id="speed-select" data-i18n-aria="speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option></select></label><button id="btn-loop" class="btn-secondary" aria-pressed="false"><span data-i18n="repeatOne"></span>: <span id="loop-label"></span></button></div>
+ <div class="learning-controls"><button id="btn-note" class="btn-action" data-i18n="note"></button><button id="btn-phrases" class="btn-action" data-i18n="phrases"></button><button id="btn-priority" class="btn-action"><span id="priority-icon">☆</span><span data-i18n="priority"></span></button></div>
+ <div id="note-area" class="note-area hidden"><label id="note-context" for="note-input"></label><textarea id="note-input" maxlength="1000000" data-i18n-aria="noteLabel" data-i18n-placeholder="notePlaceholder"></textarea><p id="note-status" role="status"></p><button id="btn-save-note" class="btn-primary" data-i18n="save"></button></div>
+</div></div>
+<div id="modal-folder" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-folder-title"><div class="modal-content"><button class="sheet-handle" data-i18n-aria="dragClose"></button><h3 id="modal-folder-title"></h3><p class="subtle" data-i18n="assignmentHint"></p><div id="modal-folder-list" class="modal-list"></div><button id="btn-assign-apply" class="btn-primary" data-i18n="apply"></button><button class="btn-secondary" data-close="modal-folder" data-i18n="close"></button></div></div>
+<div id="modal-create-folder" class="modal hidden" role="dialog" aria-modal="true" data-i18n-aria="newFolder"><div class="modal-content"><button class="sheet-handle" data-i18n-aria="dragClose"></button><h3 data-i18n="newFolder"></h3><input type="text" id="folder-name-input" maxlength="100" data-i18n-aria="folderName" data-i18n-placeholder="folderName" class="text-input"><button id="btn-folder-save" class="btn-primary" data-i18n="create"></button><button class="btn-secondary" data-close="modal-create-folder" data-i18n="cancel"></button></div></div>
+<div id="modal-edit-track" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="edit-title"><div class="modal-content"><button class="sheet-handle" data-i18n-aria="dragClose"></button><h3 id="edit-title" data-i18n="edit"></h3><label for="track-name-input" data-i18n="name"></label><input id="track-name-input" class="text-input" maxlength="200"><button id="btn-rename" class="btn-primary" data-i18n="saveName"></button><button id="btn-edit-folder" class="btn-secondary" data-i18n="chooseFolders"></button><button id="btn-edit-pin" class="btn-secondary"></button><button id="btn-edit-priority" class="btn-secondary"></button><button id="btn-edit-next" class="btn-secondary" data-i18n="playNext"></button><button id="btn-restart" class="btn-secondary" data-i18n="restart"></button><button id="btn-delete-track" class="btn-secondary danger" data-i18n="deleteRecord"></button><button class="btn-secondary" data-close="modal-edit-track" data-i18n="close"></button></div></div>
+<div id="modal-phrases" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="phrases-title"><div class="modal-content"><button class="sheet-handle" data-i18n-aria="dragClose"></button><h3 id="phrases-title" data-i18n="phrases"></h3><div id="phrases-unavailable"><p data-i18n="phrasesUnavailable"></p><p class="subtle" data-i18n="phrasesPrivacy"></p><p class="subtle" data-i18n="phrasesPlan"></p></div><div id="phrases-list"></div><button id="btn-known" class="btn-secondary hidden" data-i18n="showKnown"></button><button class="btn-secondary" data-close="modal-phrases" data-i18n="close"></button></div></div>
+<div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-content settings-content"><button class="sheet-handle" data-i18n-aria="dragClose"></button><h3 id="settings-title" data-i18n="settings"></h3><p id="app-version"></p><p id="offline-status" role="status" data-i18n="offlinePreparing"></p><p id="storage-status"></p><button id="btn-persist" class="btn-secondary" data-library-action disabled data-i18n="persist"></button><p data-i18n="storageWarning"></p><button id="btn-export" class="btn-primary" data-library-action disabled data-i18n="export"></button><div id="backup-ready" class="hidden"><p id="backup-size"></p><button id="btn-download-backup" class="btn-primary" data-i18n="download"></button><button id="btn-share-backup" class="btn-secondary" data-i18n="share"></button></div><button id="btn-import-backup" class="btn-secondary" data-library-action disabled data-i18n="restore"></button><p data-i18n="backupHelp"></p><p data-i18n="historyHelp"></p><details><summary data-i18n="install"></summary><p data-i18n="installHelp"></p></details><button class="btn-secondary" data-close="modal-settings" data-i18n="close"></button></div></div>
+<audio id="audio" preload="metadata" playsinline></audio><input type="file" id="file-input" accept="audio/*,.mp3,.m4a,.mp4,.wav,.wave,.aac,.aiff,.aif,.caf,.flac,.ogg,.oga,.opus,.webm" multiple hidden><input type="file" id="backup-input" accept=".efp,application/octet-stream" hidden>
+</div><script type="module" src="./app.js"></script></body></html>

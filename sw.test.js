@@ -13,9 +13,9 @@ function worker(){
 }
 test('Install caches the complete subpath shell including icons and modules',async()=>{
  const w=worker();let promise;w.events.install({waitUntil:p=>promise=p});await promise;
- assert.equal(w.requests.length,10);
+ assert.equal(w.requests.length,14);
  for(const req of w.requests)assert.ok(req.url.startsWith(w.scope));
- for(const file of ['app.js','db.js','backup.js','core.js','icon-192.png','icon-512.png'])assert.ok(w.requests.some(r=>r.url.endsWith(file)));
+ for(const file of ['app.js','db.js','backup.js','core.js','queue.js','listening.js','i18n.js','gestures.js','icon-192.png','icon-512.png'])assert.ok(w.requests.some(r=>r.url.endsWith(file)));
  assert.equal(w.skipped,false);
 });
 test('Activation removes only old caches inside this app scope',async()=>{

@@ -7,9 +7,26 @@ export const formatTime = seconds => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 export const formatBytes = bytes => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} ГБ` : `${(bytes / 1024 ** 2).toFixed(1)} МБ`;
-export function visibleTracks(tracks, filter) {
-  return tracks.filter(t => filter === 'review' ? t.priority : filter === 'mastered' ? !t.priority && t.playCount >= 5 : true)
-    .sort((a, b) => Number(b.priority) - Number(a.priority) || a.playCount - b.playCount || a.addedAt - b.addedAt);
+export const SORT_MODES=['newest','oldest','largest','smallest','least','most'];
+export function folderIds(track) { return [...new Set(Array.isArray(track.folderIds)?track.folderIds:track.folderId?[track.folderId]:[])]; }
+export function normalizeTrack(track) {
+  const {folderId,...rest}=track;
+  return {...rest,folderIds:folderIds(track),pinned:track.pinned===true,priority:track.priority===true};
+}
+export function visibleTracks(tracks, filter='all', sort='newest') {
+  const mode=SORT_MODES.includes(sort)?sort:'newest';
+  const value=t=>mode==='largest'||mode==='smallest'?(t.size||0):mode==='least'||mode==='most'?(t.playCount||0):(t.addedAt||0);
+  const direction=['newest','largest','most'].includes(mode)?-1:1;
+  return tracks.filter(t=>filter==='priority'?t.priority:filter==='review'?(t.playCount||0)<5:filter==='mastered'?(t.playCount||0)>=5:true)
+    .sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)||direction*(value(a)-value(b))||(a.addedAt||0)-(b.addedAt||0)||a.id.localeCompare(b.id));
+}
+export function folderStates(rows, folders) {
+  return folders.map(f=>{const n=rows.filter(t=>folderIds(t).includes(f.id)).length;return {id:f.id,state:n===0?'none':n===rows.length?'all':'some'};});
+}
+export function applyFolderChanges(track, changes) {
+  const ids=new Set(folderIds(track));
+  for(const [id,checked] of Object.entries(changes))if(checked)ids.add(id);else ids.delete(id);
+  return [...ids];
 }
 export function nextId(queue, currentId, delta, wrap = false) {
   if (!queue.length) return null;

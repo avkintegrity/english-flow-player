@@ -1,11 +1,13 @@
+import {normalizeTrack, applyFolderChanges, folderIds} from './core.js';
+import {newPass, consumePlayed} from './listening.js';
 // Keep the original database name and migrate v1 in one atomic upgrade.
 export const DB_NAME = 'english-flow-db';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export function openLibrary(name = DB_NAME) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(name, DB_VERSION);
     let blocked = false;
-    request.onblocked = () => { blocked = true; reject(new Error('Закройте другие окна English Flow и откройте приложение заново для обновления хранилища.')); };
+    request.onblocked = () => { blocked = true; reject(new Error('dbBlocked')); };
     request.onerror = () => reject(request.error);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -20,8 +22,9 @@ export function openLibrary(name = DB_NAME) {
         const {blob, ...track} = row.value;
         if (blob instanceof Blob) {
           request.transaction.objectStore('audio').put({id: track.id, blob});
-          row.update({...track, size: blob.size, type: blob.type});
+          track.size=blob.size;track.type=blob.type;
         }
+        row.update({...normalizeTrack(track),listen:track.listen||newPass(),phrases:track.phrases||{status:'not-connected',items:[]}});
         row.continue();
       };
     };
@@ -41,7 +44,7 @@ export class Library {
       const tx = this.db.transaction(stores, mode);
       let result;
       tx.oncomplete = () => resolve(typeof result === 'function' ? result() : result);
-      tx.onabort = () => reject(tx.error || new Error('Изменения не сохранены.'));
+      tx.onabort = () => reject(tx.error || new Error('saveFailed'));
       tx.onerror = () => {}; // The abort event is the final transaction outcome.
       try { result = schedule(tx); } catch (error) { tx.abort(); reject(error); }
     });
@@ -74,9 +77,29 @@ export class Library {
   }
   addTrack(track, blob) {
     return this.transaction(['tracks', 'audio'], 'readwrite', tx => {
-      tx.objectStore('tracks').add(track);
+      tx.objectStore('tracks').add({...normalizeTrack(track),listen:track.listen||newPass()});
       tx.objectStore('audio').add({id:track.id, blob});
     });
+  }
+  updateTracks(ids, update) {
+    return this.transaction(['tracks'], 'readwrite', tx=>{
+      const store=tx.objectStore('tracks'),results=[];
+      for(const id of new Set(ids)){
+        const req=store.get(id);req.onsuccess=()=>{if(req.result){const row={...req.result,...update(req.result),id};store.put(row);results.push(row);}};
+      }
+      return ()=>results;
+    });
+  }
+  assignFolders(ids, changes) { return this.updateTracks(ids,track=>({folderIds:applyFolderChanges(track,changes)})); }
+  recordProgress(id, passId, ranges, duration, position, ended=false) {
+    return this.updateTracks([id],track=>{
+      if(track.listen?.id!==passId)return {};
+      const result=consumePlayed(track.listen,ranges,duration);
+      return {listen:{...result.pass,ended:track.listen.ended||ended},duration:duration>0?duration:track.duration,lastPosition:position,playCount:(track.playCount||0)+Number(result.credit)};
+    }).then(rows=>rows[0]);
+  }
+  removeTracks(ids) {
+    return this.transaction(['tracks','audio'], 'readwrite',tx=>{for(const id of ids){tx.objectStore('tracks').delete(id);tx.objectStore('audio').delete(id);}});
   }
   removeTrack(id) {
     return this.transaction(['tracks','audio'], 'readwrite', tx => {
@@ -91,25 +114,27 @@ export class Library {
       cursor.onsuccess = () => {
         const row = cursor.result;
         if (!row) return;
-        if (row.value.folderId === id) row.update({...row.value, folderId:null});
+        if (folderIds(row.value).includes(id)) row.update({...normalizeTrack(row.value),folderIds:folderIds(row.value).filter(value=>value!==id)});
         row.continue();
       };
     });
   }
   snapshot() {
-    return this.transaction(['tracks','folders','audio'], 'readonly', tx => {
+    return this.transaction(['tracks','folders','audio','settings'], 'readonly', tx => {
       const tracks = tx.objectStore('tracks').getAll();
       const folders = tx.objectStore('folders').getAll();
       const audio = tx.objectStore('audio').getAll();
-      return () => ({tracks:tracks.result, folders:folders.result, audio:audio.result});
+      const settings = tx.objectStore('settings').getAll();
+      return () => ({tracks:tracks.result, folders:folders.result, audio:audio.result,settings:settings.result});
     });
   }
-  restore({tracks, folders, audio}) {
+  restore({tracks, folders, audio, settings=[]}, restoreSettings=false) {
     // Additive and all-or-nothing; existing recordings are never cleared.
-    return this.transaction(['tracks','folders','audio'], 'readwrite', tx => {
+    return this.transaction(['tracks','folders','audio','settings'], 'readwrite', tx => {
       for (const folder of folders) tx.objectStore('folders').add(folder);
-      for (const track of tracks) tx.objectStore('tracks').add(track);
+      for (const track of tracks) tx.objectStore('tracks').add({...normalizeTrack(track),listen:track.listen||newPass()});
       for (const row of audio) tx.objectStore('audio').add(row);
+      if(restoreSettings)for(const setting of settings)tx.objectStore('settings').put(setting);
     });
   }
 }

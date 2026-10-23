@@ -25,7 +25,7 @@ await check('Metadata patches preserve Blob and merge independent updates',async
 });
 await check('Folder deletion unassigns audio atomically',async()=>{
  await library.put('folders',{id:'folder',name:'Folder'});await library.removeFolder('folder');
- assert(!(await library.get('folders','folder')),'folder deleted');assert((await library.get('tracks','original')).folderId===null,'unassigned');
+ assert(!(await library.get('folders','folder')),'folder deleted');assert((await library.get('tracks','original')).folderIds.length===0,'unassigned');
  assert(!!(await library.get('audio','original')),'audio remains');
 });
 await check('Close/reopen retains notes, positions and audio',async()=>{
@@ -49,6 +49,37 @@ await check('Failed restore rolls back all writes, including folders',async()=>{
 await check('Delete removes audio and late autosave cannot resurrect record',async()=>{
  await library.removeTrack('original');await library.patchTrack('original',{lastPosition:55});
  assert(!(await library.get('tracks','original')),'track absent');assert(!(await library.get('audio','original')),'blob absent');
+});
+
+await check('v2→v3 migration preserves single folder, historical counts, names, notes and audio',async()=>{
+ const name=dbName+'-v2';
+ await new Promise((resolve,reject)=>{const r=indexedDB.open(name,2);r.onerror=()=>reject(r.error);r.onupgradeneeded=()=>{for(const store of ['tracks','audio','folders','settings'])r.result.createObjectStore(store,{keyPath:'id'});r.transaction.objectStore('tracks').put({id:'legacy',title:'Legacy',note:'private test note',folderId:'f',playCount:18,priority:true,lastPosition:17,addedAt:123});r.transaction.objectStore('audio').put({id:'legacy',blob});r.transaction.objectStore('folders').put({id:'f',name:'Existing'});};r.onsuccess=()=>{r.result.close();resolve();};});
+ const old=await openLibrary(name),track=await old.get('tracks','legacy');
+ assert(track.folderIds[0]==='f'&&track.playCount===18&&track.priority&&!track.pinned&&track.lastPosition===17&&track.addedAt===123&&track.note==='private test note','metadata preserved');
+ assert((await old.all('audio')).length===1&&await (await old.get('audio','legacy')).blob.text()===await blob.text(),'one unchanged audio Blob');old.db.close();indexedDB.deleteDatabase(name);
+});
+await check('A/B: atomic batch of 15 keeps old assignments; clear all folders keeps recordings',async()=>{
+ for(const id of ['old','a','b'])await library.put('folders',{id,name:id});
+ for(let i=0;i<15;i++)await library.addTrack({id:'batch-'+i,title:'Safe '+i,folderIds:i%2?['old']:[],note:'kept',addedAt:i,playCount:0},blob);
+ const ids=Array.from({length:15},(_,i)=>'batch-'+i);await library.assignFolders(ids,{a:true,b:true});
+ let rows=(await library.all('tracks')).filter(t=>ids.includes(t.id));assert(rows.length===15&&rows.every(t=>t.folderIds.includes('a')&&t.folderIds.includes('b')),'all assigned');assert(rows.find(t=>t.id==='batch-1').folderIds.includes('old'),'old kept');
+ const audioCount=(await library.all('audio')).length;await library.assignFolders(['batch-1'],{old:false,a:false,b:false});assert((await library.get('tracks','batch-1')).folderIds.length===0,'all unchecked');await library.removeFolder('a');assert((await library.all('audio')).length===audioCount,'no audio deleted or duplicated');assert((await library.get('tracks','batch-2')).folderIds.includes('b'),'other folder retained');
+});
+await check('I: coverage and count commit atomically once, survive reopen; stale pass cannot overwrite restart',async()=>{
+ let row=await library.get('tracks','batch-1');const pass=row.listen.id;
+ await library.recordProgress(row.id,pass,[[0,89]],100,89);assert((await library.get('tracks',row.id)).playCount===0,'89 percent');
+ await Promise.all([library.recordProgress(row.id,pass,[[0,90]],100,90),library.recordProgress(row.id,pass,[[0,100]],100,0,true)]);
+ library.db.close();library=await openLibrary(dbName);row=await library.get('tracks',row.id);assert(row.playCount===1&&row.listen.counted,'one credit after restart');
+ await library.patchTrack(row.id,{listen:{id:'new-pass',ranges:[],counted:false,ended:false}});await library.recordProgress(row.id,pass,[[0,100]],100,100);row=await library.get('tracks',row.id);assert(row.listen.id==='new-pass'&&row.playCount===1,'late save ignored');
+});
+await check('L: new format roundtrip retains folders, pin/priority, coverage and exact Blobs',async()=>{
+ await library.patchTrack('batch-2',{pinned:true,priority:true,listen:{id:'partial',ranges:[[0,30]],counted:false,ended:false},phrases:{status:'not-connected',items:[]}});
+ const restored=await readBackup(await createBackup(await library.snapshot()));const row=restored.tracks.find(t=>t.title==='Safe 2');assert(row.pinned&&row.priority&&row.folderIds.length===1&&row.listen.ranges[0][1]===30,'new fields');assert(await checksum(restored.audio.find(a=>a.id===row.id).blob)===await checksum(blob),'exact bytes');
+});
+await check('L: file-backed archive survives IndexedDB persistence with correct nonzero audio offset',async()=>{
+ const archive=new File([await createBackup(await library.snapshot())],'synthetic-test.efp',{type:'application/octet-stream'});
+ const restored=await readBackup(archive);await library.restore(restored);library.db.close();library=await openLibrary(dbName);
+ for(const row of restored.audio)assert(await checksum((await library.get('audio',row.id)).blob)===await checksum(row.blob),'persisted audio bytes');
 });
 library?.db.close();indexedDB.deleteDatabase(dbName);
 output.textContent+='\n\n'+results.filter(r=>r.startsWith('PASS')).length+'/'+results.length+' passed';
