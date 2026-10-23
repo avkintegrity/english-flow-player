@@ -1,0 +1,7 @@
+{
+  "name": "english-flow-player",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test *.test.js", "check": "node --check app.js && node --check db.js && node --check backup.js && node --check sw.js", "start": "python3 -m http.server 8080 --bind 127.0.0.1"}
+}

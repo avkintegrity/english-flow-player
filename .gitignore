@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+*.log
+*.efp
+*.mp3
+*.m4a
+*.wav
+*.aac
+*.flac
+work/
+outputs/
