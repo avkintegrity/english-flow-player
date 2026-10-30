@@ -1,3 +1,4 @@
+import {Phrasebook} from './phrasebook.js';
 import {LearningPlayer} from './learning-player.js';
 import {openLibrary} from './db.js';
 import {audioType,id,formatTime,visibleTracks,folderIds,folderStates,SORT_MODES} from './core.js';
@@ -6,7 +7,7 @@ import {newPass,nativeRanges} from './listening.js';
 import {PlaybackQueue} from './queue.js';
 import {t,messages,getLanguage,setLanguage,translateDOM,bytesLabel} from './i18n.js';
 
-export const VERSION='2.1.0';
+export const VERSION='2.1.1';
 const $=selector=>document.querySelector(selector),audio=$('#audio');
 let library,tracks=[],folders=[],blobs=new Map(),currentTrackId=null,currentFilter='all',folderViewId=null,sortMode='newest',visibleOrder=[];
 let queue=new PlaybackQueue(),listOptions={shuffle:false,total:1},repeatOne=false,currentUrl=null,playbackToken=0,resumeAt=0,mediaReady=false,activePass=null;
@@ -15,7 +16,7 @@ let pendingNote=null,noteTargetId=null,noteTimer,noteWrite=Promise.resolve(),not
 let busy=false,pendingWorker,updateRequested=false,preparedBackup,offlineStatus='offlinePreparing',notice=null,noticeTimer,swipeId=null,suppressClickUntil=0;
 let dragSeek=null,lastStorage=null,lastPersisted=false,failedPlaybackToken=-1,playIntent=false;
 const panels=[],focusReturns=new Map();
-let learning;
+let learning,phrasebook;
 const byId=target=>tracks.find(track=>track.id===target),folderById=target=>folders.find(folder=>folder.id===target);
 const html=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const guarded=fn=>(...args)=>Promise.resolve().then(()=>fn(...args)).catch(reportError);
@@ -107,6 +108,7 @@ function syncPanels(){
 }
 function dirtyPanel(selector){
   if(selector==='#modal-transcript-edit')return learning.hasDraft();
+  if(selector==='#modal-dictionary')return phrasebook.hasDraft();
   if(selector==='#modal-edit-track')return $('#track-name-input').value!==byId(editTrackId)?.title;
   if(selector==='#modal-create-folder')return !!$('#folder-name-input').value.trim();
   return selector==='#modal-folder'&&Object.keys(assignChanges).length>0;
@@ -118,7 +120,7 @@ async function closePanel(selector=panels.at(-1),force=false){
     if(dirtyPanel(selector)&&!confirm(t('discard')))return false;
   }
   const index=panels.indexOf(selector);if(index!==panels.length-1&&!force)return false;
-  for(const removed of panels.splice(index)){hide(removed);$(removed).inert=false;if(removed==='#modal-transcript-edit')learning.closeEditor();}
+  for(const removed of panels.splice(index)){hide(removed);$(removed).inert=false;if(removed==='#modal-transcript-edit')learning.closeEditor();if(removed==='#modal-dictionary')phrasebook.closeEditor();}
   syncPanels();const target=focusReturns.get(selector);(target?.isConnected?target:$('#btn-language')).focus({preventScroll:true});return true;
 }
 function flushNote(){
@@ -224,11 +226,7 @@ async function deleteTracks(ids){
   tracks=tracks.filter(t=>!removed.has(t.id));targets.forEach(id=>{blobs.delete(id);selectedIds.delete(id);});queue.prune(tracks.map(t=>t.id));saveQueue()?.catch(reportError);
   if(removed.has(editTrackId))await closePanel('#modal-edit-track',true);renderTracks(true);renderFolders();paintPlayback();notify('deleted',{n:targets.length});
 }
-function renderPhrases(){
-  const data=byId(phrasesTrackId)?.phrases||{status:'not-connected',items:[]};$('#phrases-unavailable').classList.toggle('hidden',data.status==='ready');
-  const items=data.items.filter(item=>showKnown||!item.known);$('#phrases-list').innerHTML=items.map(item=>`<article><strong>${html(item.expression)}</strong><p>${html(item.meaning)}</p><p>${html(item.context)}</p>${Number.isFinite(item.time)?`<button data-phrase-seek="${item.time}" class="btn-secondary">▶ ${formatTime(item.time)}</button>`:''}<button data-known="${html(item.id)}" class="btn-secondary" aria-pressed="${!!item.known}">${item.known?'✓ ':''}${t('known')}</button></article>`).join('')||(data.status==='ready'?`<p>${t('phrasesEmpty')}</p>`:'');
-  $('#btn-known').classList.toggle('hidden',!data.items.some(item=>item.known));$('#btn-known').textContent=t(showKnown?'hideKnown':'showKnown');
-}
+function renderPhrases(){phrasebook?.render();}
 async function refreshLibrary(){const snapshot=await library.snapshot();tracks=snapshot.tracks;folders=snapshot.folders;blobs=new Map(snapshot.audio.map(row=>[row.id,row.blob]));renderTracks(true);renderFolders();return snapshot;}
 function paintStorage(){
   $('#storage-status').textContent=t('storage',{n:tracks.length,size:bytesLabel(tracks.reduce((n,t)=>n+(t.size||0),0))})+(lastStorage?.quota?t('available',{size:bytesLabel(Math.max(0,lastStorage.quota-(lastStorage.usage||0)))}):'')+'. '+t(lastPersisted?'persisted':'bestEffort');
@@ -330,13 +328,6 @@ $('#btn-loop').onclick=()=>{repeatOne=!repeatOne;audio.loop=false;renderQueue();
 $('#btn-priority').onclick=guarded(()=>toggleProperty(currentTrackId,'priority'));$('#btn-note').onclick=openNote;
 $('#note-input').oninput=e=>{pendingNote={id:noteTargetId,text:e.target.value,revision:++noteRevision};noteStatus='saving';$('#note-status').textContent=t(noteStatus);clearTimeout(noteTimer);noteTimer=setTimeout(()=>flushNote().catch(reportError),500);};
 $('#btn-save-note').onclick=guarded(saveNote);
-$('#btn-phrases').onclick=()=>{phrasesTrackId=currentTrackId;showKnown=false;renderPhrases();showPanel('#modal-phrases');};
-$('#btn-known').onclick=()=>{showKnown=!showKnown;renderPhrases();};
-$('#phrases-list').onclick=guarded(async e=>{
-  const known=e.target.closest('[data-known]'),seek=e.target.closest('[data-phrase-seek]');
-  if(known){const track=byId(phrasesTrackId);await patchTrack(track.id,{phrases:{...track.phrases,items:track.phrases.items.map(item=>item.id===known.dataset.known?{...item,known:!item.known}:item)}});renderPhrases();}
-  if(seek){if(currentTrackId!==phrasesTrackId)attachTrack(phrasesTrackId);seekTo(Number(seek.dataset.phraseSeek));startAudio();}
-});
 $('#btn-settings').onclick=()=>{showPanel('#modal-settings');storageStatus().catch(reportError);};$('#btn-persist').onclick=guarded(async()=>{await navigator.storage?.persist?.();await storageStatus();});
 $('#btn-export').onclick=guarded(prepareBackup);$('#btn-download-backup').onclick=downloadBackup;$('#btn-share-backup').onclick=()=>navigator.share({files:[preparedBackup.file],title:'English Flow'}).catch(e=>{if(e.name!=='AbortError')reportError(e);});
 $('#btn-import-backup').onclick=()=>$('#backup-input').click();$('#backup-input').onchange=guarded(async e=>{const file=e.target.files[0];e.target.value='';if(file)await importBackup(file);});
@@ -383,7 +374,7 @@ window.addEventListener('online',()=>notify('online'));window.addEventListener('
 if('mediaSession' in navigator)for(const [action,handler] of Object.entries({play:()=>{if(audio.paused)togglePlay();},pause:()=>{captureProgress().catch(reportError);audio.pause();},seekbackward:e=>seekTo(audio.currentTime-(e.seekOffset||15)),seekforward:e=>seekTo(audio.currentTime+(e.seekOffset||15)),seekto:e=>seekTo(e.seekTime),previoustrack:()=>advance(-1),nexttrack:()=>advance(1)}))try{navigator.mediaSession.setActionHandler(action,handler);}catch{}
 try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch{}
 $('#btn-update').onclick=guarded(async()=>{
-  if(busy){notify('busyWait');return;}if(!audio.paused||noteOpen()||learning?.hasDraft()){notify('updatePause');return;}
+  if(busy){notify('busyWait');return;}if(!audio.paused||noteOpen()||(learning?.hasDraft()||phrasebook?.hasDraft())){notify('updatePause');return;}
   await flushNote();await captureProgress();await saveQueue();
   if(!pendingWorker||['activated','redundant'].includes(pendingWorker.state)){location.reload();return;}
   updateRequested=true;pendingWorker.postMessage({type:'SKIP_WAITING'});
@@ -415,5 +406,6 @@ async function init(){
   initServiceWorker();
 }
 learning=new LearningPlayer({audio,library:()=>library,getTrack:byId,getBlob:id=>blobs.get(id),notify,reportError,setBusy,openPanel:showPanel,closePanel,seek:seconds=>{if(mediaReady)seekTo(seconds,false);else resumeAt=seconds;},play:startAudio,finishNote:async()=>{await flushNote();if(pendingNote)return false;$('#note-input').blur();hide('#note-area');return true;}});
+phrasebook=new Phrasebook({library:()=>library,currentTrack:()=>currentTrackId,getTrack:byId,patchTrack,openPanel:showPanel,closePanel,reportError,notify,playSegment:async(track,segment)=>{if(currentTrackId!==track)attachTrack(track);showPanel('#full-player');await learning.open();learning.jump(segment,'once');}});
 $('#btn-player-tab').onclick=guarded(async()=>{await flushNote();if(!pendingNote){hide('#note-area');learning.hide();}});
 init();

@@ -1,3 +1,20 @@
+# Verified update 2.1.1 — 2026-10-30
+
+Only generated audio and synthetic test databases were used. No personal recordings or backups were inspected.
+
+- Node: 40 tests, plus JavaScript syntax checks.
+- Python local pipeline: 6 tests, including strict source/timing validation, missing translations, exact source expressions and both classic/extensible PCM headers.
+- Safari storage: 14/14, including v1/v2/v3 migration, audio/metadata retention and learning/EFP roundtrip.
+- Safari learning/native audio: 12/12, including seek/highlight, last-sentence repeat without queue advance, loop, pause, RU search/edit, cached phrase saving, known filtering and normal end after a drill.
+- Manual Safari: generated spoken WAV and exact-hash transcript import; actual Mac AI result import; manual correction of one awkward Russian sentence; saved check-in expression; reload and playback with the HTTP server stopped (connection refusal verified); text and saved phrase retained.
+- Explicit PWA updates retained the synthetic library. Database name, origin, PWA id and scope are unchanged; DB v4 adds a separate learning store. Old EFP v1/v2 remain readable, new v3 includes learning.
+- Local Mac: WAV full pipeline; M4A conversion/ASR. 9.484 seconds of speech, 3 segments, 13 phrase/word entries, 7.297 seconds measured with warmed tools. The result passed the real Player importer/hash validator. Translation quality still needs review.
+- Safari on this Mac returned no confirmed local en-US speech voice; the fallback message was verified. Actual synthesized voice playback is NOT TESTED.
+
+Physical iPhone: NOT TESTED. Still verify installation/update of the user's real PWA, Files import, persistence after closing, airplane-mode use, selection/keyboard, AirPods, background/locked-screen playback and sentence timers. Long/noisy recordings and arbitrary codecs are NOT TESTED. Tests do not establish perfect ASR/translation accuracy.
+
+## Historical 2.0.3 baseline (previous testing)
+
 # Проверки English Flow Player 2.0.3
 
 Только специально созданные синтетические WAV, тестовые метаданные и `.efp`. Личные аудио и резервные копии не использовались. Файлы QA находятся вне репозитория. Тестовые страницы не отправляют аудио на сервер.

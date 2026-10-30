@@ -13,7 +13,7 @@ function worker(){
 }
 test('Install caches the complete subpath shell including icons and modules',async()=>{
  const w=worker();let promise;w.events.install({waitUntil:p=>promise=p});await promise;
- assert.equal(w.requests.length,17);
+ assert.equal(w.requests.length,18);
  for(const req of w.requests)assert.ok(req.url.startsWith(w.scope));
  for(const file of ['transcript.js','fingerprint.js','learning-player.js','app.js','db.js','backup.js','core.js','queue.js','listening.js','i18n.js','gestures.js','icon-192.png','icon-512.png'])assert.ok(w.requests.some(r=>r.url.endsWith(file)));
  assert.equal(w.skipped,false);

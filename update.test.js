@@ -85,7 +85,7 @@ test('D: vertical motion, small jitter and edge gesture remain distinct from hor
  assert.equal(gestureDirection(8,50),'vertical');assert.equal(gestureDirection(6,3),null);assert.equal(gestureDirection(80,10),'right');assert.equal(gestureDirection(-80,10),'left');assert.equal(isEdge(10,390),true);assert.equal(isEdge(380,390),true);assert.equal(isEdge(190,390),false);
 });
 test('H: every static and literal dynamic translation key exists in both languages',()=>{
- const html=fs.readFileSync(new URL('./index.html',import.meta.url),'utf8'),app=fs.readFileSync(new URL('./app.js',import.meta.url),'utf8');
+ const html=fs.readFileSync(new URL('./index.html',import.meta.url),'utf8'),app=['app.js','learning-player.js','phrasebook.js'].map(p=>fs.readFileSync(new URL('./'+p,import.meta.url),'utf8')).join('\n');
  const keys=[...html.matchAll(/data-i18n(?:-aria|-title|-placeholder)?="([^"]+)"/g)].map(m=>m[1]);keys.push(...[...app.matchAll(/\b(?:t|notify)\('([A-Za-z]+)'/g)].map(m=>m[1]));
  for(const key of keys){assert.ok(messages[key],key);assert.equal(messages[key].length,2);assert.ok(messages[key].every(Boolean),key);}
  setLanguage('en');assert.equal(t('selected',{n:15}),'Selected: 15');setLanguage('ru');assert.equal(t('selected',{n:15}),'Выбрано: 15');

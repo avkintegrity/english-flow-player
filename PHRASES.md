@@ -1,19 +1,15 @@
-# Статус «Фраз» в 2.0.3: НЕ ПОДКЛЮЧЕНО
+# Text and phrases in 2.1.1
 
-Автоматическое извлечение лексики не реализовано и не объявляется готовым. Интерфейс показывает этот статус; модель не загружается, аудио и транскрипты не отправляются, API-ключей и платных вызовов нет. Схема хранения подготовлена отдельно от личной заметки: expression, meaning, context, подтверждённое time и known, привязанные к записи; они входят в резервную копию.
+Open a recording → **Text → Import text**. Select the `.eftext` made by the [Mac tool](local-ai/README.md) from the same original audio. SHA-256, size and duration are checked; filenames alone never identify a recording. SRT/VTT import English only and require explicit manual association.
 
-## Оценка локального варианта
+Listen with EN/RU text. Tap a sentence to seek and play; use Repeat, Loop, Pause after sentence and the sentence arrows. Language modes, search and follow scrolling are in the expandable options. Manual scrolling pauses following. The pencil edits EN/RU without changing audio.
 
-`SpeechRecognition.processLocally` и проверка доступности языковых пакетов экспериментальны и не дают подтверждённого универсального распознавания произвольных файлов в установленной iPhone PWA. [MDN processLocally](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/processLocally), [MDN available](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/available_static).
+Select English words and tap the dictionary button that appears, or tap **Dictionary** on a sentence. Cached contextual meanings work offline. If a meaning is missing, the full sentence translation is shown and you can enter it manually. There is no automatic iPhone translation of arbitrary new selections.
 
-Whisper через Transformers.js/WASM/WebGPU — кандидат для локального прототипа, но пригодность зависит от Safari/iOS, памяти, размера модели и длительности аудио. [Официальное руководство Transformers.js по WebGPU](https://huggingface.co/docs/transformers.js/guides/webgpu). На физическом iPhone этот путь **NOT TESTED**; большая модель не устанавливалась. Одного распознавания недостаточно для качественного B1–B2 отбора и русского значения в контексте.
+**Save to my phrases** retains the meaning, source sentence, time and track. **Already know** hides an item; known items can be shown again. The Phrases panel switches between useful expressions and your saved items. Unsaved individual dictionary words are excluded from the useful-expression list.
 
-## Следующий этап при отдельном подключении
+**Speak US** uses only an installed local en-US voice. If unavailable, replay the original sentence. Optional model IPA is explicitly labelled and is not a verified pronunciation dictionary.
 
-1. Проверить небольшой локальный прототип на синтетической/разрешённой английской речи и целевом iPhone; измерить качество, время, память и расход батареи.
-2. Перед загрузкой выбранных моделей показать фактический размер и получить согласие. Загрузка модели получает только файлы модели с её хостинга; аудио остаётся в устройстве. Затем кэшировать компоненты для офлайн-работы.
-3. Обрабатывать по одному файлу в Worker с прогрессом и отменой. Проверять кандидатов по исходному контексту: никаких слов из имени файла, выдуманных времён, имён собственных и искусственного заполнения списка до 15.
-4. Отдельно проверить локальный отбор выражений и русский перевод значения. Сохранять результат и версию модели, не повторять анализ без причины; «Уже знаю» скрывает элемент.
-5. Автоматический анализ новых записей включать отдельной настройкой после согласия. Работу при закрытом приложении не обещать.
+AI can produce incorrect or unnatural language. Review and edit it. Timing is segment-level. Reimport replaces the text and phrase list after confirmation: export an `.efp` first to retain an earlier revision.
 
-Локальный вариант не требует оплаты API, но использует память, место, трафик загрузки моделей и батарею. Лицензии конкретных моделей нужно проверить перед выбором. Облачный вариант здесь не подключён: он потребовал бы отдельного согласования передачи аудио/транскрипта, сервера для защиты ключа и стоимости провайдера. Инфраструктура других проектов не используется.
+Learning data is stored separately from audio and notes in IndexedDB and included in EFP v3 backups. EFP v1/v2 remain readable. Keep backups outside the PWA; browser data can be removed by clearing site data.
