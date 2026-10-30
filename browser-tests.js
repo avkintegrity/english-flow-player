@@ -81,5 +81,15 @@ await check('L: file-backed archive survives IndexedDB persistence with correct 
  const restored=await readBackup(archive);await library.restore(restored);library.db.close();library=await openLibrary(dbName);
  for(const row of restored.audio)assert(await checksum((await library.get('audio',row.id)).blob)===await checksum(row.blob),'persisted audio bytes');
 });
+await check('v3 to v4 adds learning without modifying audio, note, folders or listening history',async()=>{
+ const name=dbName+'-v3';await new Promise((resolve,reject)=>{const r=indexedDB.open(name,3);r.onerror=()=>reject(r.error);r.onupgradeneeded=()=>{for(const store of ['tracks','audio','folders','settings'])r.result.createObjectStore(store,{keyPath:'id'});r.transaction.objectStore('tracks').put({id:'old',title:'V3',folderIds:['f'],note:'Keep note',playCount:9,priority:true,pinned:true,listen:{id:'pass',ranges:[[0,3]],counted:false,ended:false}});r.transaction.objectStore('audio').put({id:'old',blob});};r.onsuccess=()=>{r.result.close();resolve();};});
+ const v4=await openLibrary(name),row=await v4.get('tracks','old');assert(row.note==='Keep note'&&row.playCount===9&&row.folderIds[0]==='f'&&row.listen.id==='pass','old metadata');assert(await (await v4.get('audio','old')).blob.text()===await blob.text(),'original audio');assert((await v4.all('learning')).length===0,'empty additive store');v4.db.close();indexedDB.deleteDatabase(name);
+});
+await check('Transcript persists independently, exports/restores and cannot resurrect deleted audio',async()=>{
+ const transcript={format:'english-flow-transcript',version:1,audio:{sha256:'a'.repeat(64),size:blob.size,duration:3},segments:[{id:'s',start:0,end:3,en:'Please check in.',ru:'Test translation'}]};
+ await library.putLearning('batch-1',{transcript,phrases:[]});library.db.close();library=await openLibrary(dbName);assert((await library.get('learning','batch-1')).transcript.segments[0].en==='Please check in.','reopen');
+ const restored=await readBackup(await createBackup(await library.snapshot()));assert(restored.learning.length===1,'backup contains learning');await library.restore(restored);assert(!!(await library.get('learning',restored.learning[0].id)),'restored link');
+ await library.removeTrack('batch-1');assert(!await library.putLearning('batch-1',{transcript,phrases:[]}),'late save rejected');assert(!await library.get('learning','batch-1'),'learning deleted with audio');
+});
 library?.db.close();indexedDB.deleteDatabase(dbName);
 output.textContent+='\n\n'+results.filter(r=>r.startsWith('PASS')).length+'/'+results.length+' passed';

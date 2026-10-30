@@ -1,7 +1,8 @@
+import {validateLearning} from './transcript.js';
 import {id,folderIds,SORT_MODES} from './core.js';
 import {newPass,mergeRanges} from './listening.js';
 const MAGIC = 'EFPB0001';
-const MAX_MANIFEST = 8 * 1024 * 1024;
+const MAX_MANIFEST = 32 * 1024 * 1024;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', {fatal:true});
 const crcTable = Array.from({length:256}, (_, n) => {
@@ -24,11 +25,11 @@ export async function createBackup(snapshot, progress = () => {}) {
   for (const [index, track] of snapshot.tracks.entries()) {
     const blob = blobs.get(track.id);
     if (!(blob instanceof Blob)) throw new Error('audioMissing');
-    records.push({...track, size:blob.size, type:blob.type, checksum:await checksum(blob)});
+    records.push({...track, learning:snapshot.learning?.find(row=>row.id===track.id), size:blob.size, type:blob.type, checksum:await checksum(blob)});
     parts.push(blob);
     progress(index+1,snapshot.tracks.length);
   }
-  const json = encoder.encode(JSON.stringify({format:'english-flow-backup',version:2,settings:snapshot.settings||[],createdAt:new Date().toISOString(),folders:snapshot.folders,tracks:records}));
+  const json = encoder.encode(JSON.stringify({format:'english-flow-backup',version:3,settings:snapshot.settings||[],createdAt:new Date().toISOString(),folders:snapshot.folders,tracks:records}));
   if (json.length > MAX_MANIFEST) throw new Error('backupTooLarge');
   const length = new Uint8Array(4);
   new DataView(length.buffer).setUint32(0,json.length,true);
@@ -45,7 +46,7 @@ export async function readBackup(file, progress = () => {}) {
   if (!size || size > MAX_MANIFEST || size + 12 > file.size) invalid();
   let manifest;
   try { manifest = JSON.parse(decoder.decode(await file.slice(12,12+size).arrayBuffer())); } catch { invalid(); }
-  if (manifest?.format !== 'english-flow-backup' || ![1,2].includes(manifest.version) || !Array.isArray(manifest.tracks) || !Array.isArray(manifest.folders) || manifest.tracks.length > 10000 || manifest.folders.length > 10000) invalid();
+  if (manifest?.format !== 'english-flow-backup' || ![1,2,3].includes(manifest.version) || !Array.isArray(manifest.tracks) || !Array.isArray(manifest.folders) || manifest.tracks.length > 10000 || manifest.folders.length > 10000) invalid();
   const folderIds = new Map();
   const folders = manifest.folders.map(f => {
     if (!f || !text(f.id,200) || !f.id || folderIds.has(f.id) || !text(f.name,1000) || !f.name.trim()) invalid();
@@ -53,7 +54,7 @@ export async function readBackup(file, progress = () => {}) {
     return {id:newId, name:f.name, createdAt:number(f.createdAt) ? f.createdAt : Date.now()};
   });
   const trackIds = new Map();
-  const tracks = [], audio = [];
+  const tracks = [], audio = [], learning = [];
   let offset = 12+size;
   for (const [index,t] of manifest.tracks.entries()) {
     if (!t || !text(t.id,200) || !t.id || trackIds.has(t.id) || !text(t.title,1000) || !t.title.trim() || !text(t.note || '',1000000) || !text(t.type || '',100) || !Number.isSafeInteger(t.size) || t.size <= 0 || offset+t.size > file.size || !/^[a-f0-9]{8}$/.test(t.checksum) || (t.folderId != null && !folderIds.has(t.folderId))) invalid();
@@ -84,6 +85,7 @@ export async function readBackup(file, progress = () => {}) {
     const newId = id();trackIds.set(t.id,newId);
     tracks.push({id:newId,title:t.title,note:t.note || '',type:t.type || '',size:t.size,folderIds:[...new Set(memberships.map(value=>folderIds.get(value)))],pinned:t.pinned===true,listen,phrases,priority:t.priority === true,duration:number(t.duration)?t.duration:0,playCount:Number.isSafeInteger(t.playCount)&&t.playCount>=0?t.playCount:0,lastPosition:number(t.lastPosition)?t.lastPosition:0,addedAt:number(t.addedAt)?t.addedAt:Date.now()});
     audio.push({id:newId,blob});
+    if(t.learning!=null){try{learning.push({id:newId,...validateLearning(t.learning)});}catch{invalid();}}
     offset+=t.size;
     progress(index+1,manifest.tracks.length);
   }
@@ -107,5 +109,5 @@ export async function readBackup(file, progress = () => {}) {
       settings.push({id:'queue',value:q});
     }
   }
-  return {tracks,folders,audio,settings};
+  return {tracks,folders,audio,settings,learning};
 }

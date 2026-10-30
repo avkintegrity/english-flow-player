@@ -2,7 +2,7 @@ import {normalizeTrack, applyFolderChanges, folderIds} from './core.js';
 import {newPass, consumePlayed} from './listening.js';
 // Keep the original database name and migrate v1 in one atomic upgrade.
 export const DB_NAME = 'english-flow-db';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 export function openLibrary(name = DB_NAME) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(name, DB_VERSION);
@@ -11,7 +11,7 @@ export function openLibrary(name = DB_NAME) {
     request.onerror = () => reject(request.error);
     request.onupgradeneeded = () => {
       const db = request.result;
-      for (const name of ['tracks', 'folders', 'audio', 'settings']) {
+      for (const name of ['tracks', 'folders', 'audio', 'settings', 'learning']) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, {keyPath: 'id'});
       }
       // Metadata edits no longer re-write a potentially large audio Blob.
@@ -75,6 +75,13 @@ export class Library {
       return () => result;
     });
   }
+  putLearning(id, value) {
+    return this.transaction(['tracks','learning'], 'readwrite', tx=>{
+      const req=tx.objectStore('tracks').get(id);let saved=false;
+      req.onsuccess=()=>{if(req.result){tx.objectStore('learning').put({...value,id});saved=true;}};
+      return ()=>saved;
+    });
+  }
   addTrack(track, blob) {
     return this.transaction(['tracks', 'audio'], 'readwrite', tx => {
       tx.objectStore('tracks').add({...normalizeTrack(track),listen:track.listen||newPass()});
@@ -99,12 +106,13 @@ export class Library {
     }).then(rows=>rows[0]);
   }
   removeTracks(ids) {
-    return this.transaction(['tracks','audio'], 'readwrite',tx=>{for(const id of ids){tx.objectStore('tracks').delete(id);tx.objectStore('audio').delete(id);}});
+    return this.transaction(['tracks','audio','learning'], 'readwrite',tx=>{for(const id of ids){tx.objectStore('tracks').delete(id);tx.objectStore('audio').delete(id);tx.objectStore('learning').delete(id);}});
   }
   removeTrack(id) {
-    return this.transaction(['tracks','audio'], 'readwrite', tx => {
+    return this.transaction(['tracks','audio','learning'], 'readwrite', tx => {
       tx.objectStore('tracks').delete(id);
       tx.objectStore('audio').delete(id);
+      tx.objectStore('learning').delete(id);
     });
   }
   removeFolder(id) {
@@ -120,20 +128,22 @@ export class Library {
     });
   }
   snapshot() {
-    return this.transaction(['tracks','folders','audio','settings'], 'readonly', tx => {
+    return this.transaction(['tracks','folders','audio','settings','learning'], 'readonly', tx => {
       const tracks = tx.objectStore('tracks').getAll();
       const folders = tx.objectStore('folders').getAll();
       const audio = tx.objectStore('audio').getAll();
       const settings = tx.objectStore('settings').getAll();
-      return () => ({tracks:tracks.result, folders:folders.result, audio:audio.result,settings:settings.result});
+      const learning = tx.objectStore('learning').getAll();
+      return () => ({tracks:tracks.result, folders:folders.result, audio:audio.result,settings:settings.result,learning:learning.result});
     });
   }
-  restore({tracks, folders, audio, settings=[]}, restoreSettings=false) {
+  restore({tracks, folders, audio, settings=[], learning=[]}, restoreSettings=false) {
     // Additive and all-or-nothing; existing recordings are never cleared.
-    return this.transaction(['tracks','folders','audio','settings'], 'readwrite', tx => {
+    return this.transaction(['tracks','folders','audio','settings','learning'], 'readwrite', tx => {
       for (const folder of folders) tx.objectStore('folders').add(folder);
       for (const track of tracks) tx.objectStore('tracks').add({...normalizeTrack(track),listen:track.listen||newPass()});
       for (const row of audio) tx.objectStore('audio').add(row);
+      for (const row of learning) tx.objectStore('learning').add(row);
       if(restoreSettings)for(const setting of settings)tx.objectStore('settings').put(setting);
     });
   }

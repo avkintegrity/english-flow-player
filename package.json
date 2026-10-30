@@ -1,7 +1,7 @@
 {
   "name": "english-flow-player",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
-  "scripts": {"test": "node --test *.test.js", "check": "node --check app.js && node --check db.js && node --check backup.js && node --check sw.js && node --check queue.js && node --check listening.js && node --check i18n.js && node --check gestures.js", "start": "python3 -m http.server 8080 --bind 127.0.0.1"}
+  "scripts": {"test": "node --test *.test.js", "check": "node --check app.js && node --check db.js && node --check backup.js && node --check sw.js && node --check queue.js && node --check listening.js && node --check i18n.js && node --check gestures.js && node --check transcript.js && node --check learning-player.js && node --check fingerprint.js", "start": "python3 -m http.server 8080 --bind 127.0.0.1"}
 }
