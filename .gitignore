@@ -11,3 +11,11 @@ node_modules/
 *.flac
 work/
 outputs/
+.local-ai/
+.ai-work/
+*.eftext
+*.aiff
+*.aif
+*.ogg
+*.opus
+__pycache__/
