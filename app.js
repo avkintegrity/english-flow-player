@@ -8,7 +8,7 @@ import {newPass,nativeRanges} from './listening.js';
 import {PlaybackQueue} from './queue.js';
 import {t,messages,getLanguage,setLanguage,translateDOM,bytesLabel} from './i18n.js';
 
-export const VERSION='2.2.0';
+export const VERSION='2.2.1';
 const $=selector=>document.querySelector(selector),audio=$('#audio');
 let library,tracks=[],folders=[],blobs=new Map(),currentTrackId=null,currentFilter='all',folderViewId=null,sortMode='newest',visibleOrder=[];
 let queue=new PlaybackQueue(),listOptions={shuffle:false,total:1},repeatOne=false,currentUrl=null,playbackToken=0,resumeAt=0,mediaReady=false,activePass=null;
@@ -51,7 +51,7 @@ function renderTracks(reset=false){
       <div class="swipe-actions right">${actionButton('folders',t('folders'))}${actionButton('rename',t('rename'))}${actionButton('delete',t('delete'),'danger')}</div>
       <div class="track-face"><div class="track-top"><span class="selection-check" aria-hidden="true">${selected?'☑':'☐'}</span>
       <button class="track-play-btn" data-action="play" aria-label="${html(t(playing?'pause':'play')+': '+track.title)}">${playing?'⏸':'▶'}</button>
-      <button class="track-info" data-action="open" ${selectionMode?`aria-pressed="${selected}"`:''} aria-label="${html(t(selectionMode?(selected?'selectedTrack':'unselectedTrack'):'open')+': '+track.title)}"><span class="track-title"><span class="track-flags">${track.pinned?'📌 ':''}${track.priority?'★ ':''}</span>${html(track.title)}</span><span class="track-meta"><span>${formatTime(track.duration)}</span><span class="play-count">×${track.playCount||0}</span><span>${bytesLabel(track.size||0)}</span>${folderIds(track).map(fid=>`<span class="folder-badge">${html(folderById(fid)?.name||'')}</span>`).join('')}</span></button>
+      <button class="track-info" data-action="open" ${selectionMode?`aria-pressed="${selected}"`:''} aria-label="${html(t(selectionMode?(selected?'selectedTrack':'unselectedTrack'):'open')+': '+track.title)}"><span class="track-title"><span class="track-flags">${track.pinned?'📌 ':''}${track.priority?'★ ':''}</span>${html(track.title)}</span><span class="track-meta"><span class="track-duration">${formatTime(track.duration)}</span><span class="play-count">×${track.playCount||0}</span><span>${bytesLabel(track.size||0)}</span>${folderIds(track).map(fid=>`<span class="folder-badge">${html(folderById(fid)?.name||'')}</span>`).join('')}</span></button>
       <button class="btn-icon" data-action="edit" aria-label="${html(t('edit')+': '+track.title)}">⋯</button></div><div class="inline-subtitle hidden"><p></p><button class="btn-secondary" data-action="text">${html(t('createText'))}</button></div>${track.note?`<div class="track-note-preview">${html(t('note'))}: ${html(track.note)}</div>`:''}</div></article>`;
   }).join('');renderSelection();paintPlayback();
 }
@@ -81,7 +81,7 @@ function paintPlayback(){
   }
   for(const selector of ['#btn-play','#btn-mini-play']){$(selector).textContent=audio.paused?'▶':'⏸';$(selector).setAttribute('aria-label',t(audio.paused?'play':'pause'));}
   // Update counts and icons in place. Never re-sort or replace cards on playback events.
-  document.querySelectorAll('.track-card').forEach(card=>{const row=byId(card.dataset.id);if(!row)return;const playing=row.id===currentTrackId&&!audio.paused;card.classList.toggle('playing',row.id===currentTrackId);card.querySelector('.play-count').textContent='×'+(row.playCount||0);const button=card.querySelector('[data-action=play]');button.textContent=playing?'⏸':'▶';button.setAttribute('aria-label',t(playing?'pause':'play')+': '+row.title);});
+  document.querySelectorAll('.track-card').forEach(card=>{const row=byId(card.dataset.id);if(!row)return;const playing=row.id===currentTrackId&&!audio.paused;card.classList.toggle('playing',row.id===currentTrackId);card.querySelector('.track-duration').textContent=formatTime(row.duration);card.querySelector('.play-count').textContent='×'+(row.playCount||0);const button=card.querySelector('[data-action=play]');button.textContent=playing?'⏸':'▶';button.setAttribute('aria-label',t(playing?'pause':'play')+': '+row.title);});
   renderQueue();updateTimeline();inlineSubtitles.render();updateInsets();
 }
 function updateTimeline(){

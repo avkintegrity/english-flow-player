@@ -1,5 +1,5 @@
 // Change VERSION whenever any app-shell file changes. IndexedDB is independent.
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 const PREFIX = `english-flow-shell:${new URL(self.registration.scope).pathname}:`;
 const CACHE_NAME = PREFIX + VERSION;
 const ASSETS = ['./','./index.html','./styles.css','./app.js','./transcript.js','./fingerprint.js','./learning-player.js', './phrasebook.js','./inline-subtitles.js','./core.js','./listening.js','./queue.js','./i18n.js','./gestures.js','./db.js','./backup.js','./manifest.json','./icon-192.png','./icon-512.png'];
