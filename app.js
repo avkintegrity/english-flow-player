@@ -1,3 +1,4 @@
+import {InlineSubtitles} from './inline-subtitles.js';
 import {Phrasebook} from './phrasebook.js';
 import {LearningPlayer} from './learning-player.js';
 import {openLibrary} from './db.js';
@@ -7,7 +8,7 @@ import {newPass,nativeRanges} from './listening.js';
 import {PlaybackQueue} from './queue.js';
 import {t,messages,getLanguage,setLanguage,translateDOM,bytesLabel} from './i18n.js';
 
-export const VERSION='2.1.1';
+export const VERSION='2.2.0';
 const $=selector=>document.querySelector(selector),audio=$('#audio');
 let library,tracks=[],folders=[],blobs=new Map(),currentTrackId=null,currentFilter='all',folderViewId=null,sortMode='newest',visibleOrder=[];
 let queue=new PlaybackQueue(),listOptions={shuffle:false,total:1},repeatOne=false,currentUrl=null,playbackToken=0,resumeAt=0,mediaReady=false,activePass=null;
@@ -17,6 +18,7 @@ let busy=false,pendingWorker,updateRequested=false,preparedBackup,offlineStatus=
 let dragSeek=null,lastStorage=null,lastPersisted=false,failedPlaybackToken=-1,playIntent=false;
 const panels=[],focusReturns=new Map();
 let learning,phrasebook;
+const inlineSubtitles=new InlineSubtitles();
 const byId=target=>tracks.find(track=>track.id===target),folderById=target=>folders.find(folder=>folder.id===target);
 const html=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const guarded=fn=>(...args)=>Promise.resolve().then(()=>fn(...args)).catch(reportError);
@@ -50,7 +52,7 @@ function renderTracks(reset=false){
       <div class="track-face"><div class="track-top"><span class="selection-check" aria-hidden="true">${selected?'☑':'☐'}</span>
       <button class="track-play-btn" data-action="play" aria-label="${html(t(playing?'pause':'play')+': '+track.title)}">${playing?'⏸':'▶'}</button>
       <button class="track-info" data-action="open" ${selectionMode?`aria-pressed="${selected}"`:''} aria-label="${html(t(selectionMode?(selected?'selectedTrack':'unselectedTrack'):'open')+': '+track.title)}"><span class="track-title"><span class="track-flags">${track.pinned?'📌 ':''}${track.priority?'★ ':''}</span>${html(track.title)}</span><span class="track-meta"><span>${formatTime(track.duration)}</span><span class="play-count">×${track.playCount||0}</span><span>${bytesLabel(track.size||0)}</span>${folderIds(track).map(fid=>`<span class="folder-badge">${html(folderById(fid)?.name||'')}</span>`).join('')}</span></button>
-      <button class="btn-icon" data-action="edit" aria-label="${html(t('edit')+': '+track.title)}">⋯</button></div>${track.note?`<div class="track-note-preview">${html(track.note)}</div>`:''}</div></article>`;
+      <button class="btn-icon" data-action="edit" aria-label="${html(t('edit')+': '+track.title)}">⋯</button></div><div class="inline-subtitle hidden"><p></p><button class="btn-secondary" data-action="text">${html(t('createText'))}</button></div>${track.note?`<div class="track-note-preview">${html(t('note'))}: ${html(track.note)}</div>`:''}</div></article>`;
   }).join('');renderSelection();paintPlayback();
 }
 function renderSelection(){
@@ -80,7 +82,7 @@ function paintPlayback(){
   for(const selector of ['#btn-play','#btn-mini-play']){$(selector).textContent=audio.paused?'▶':'⏸';$(selector).setAttribute('aria-label',t(audio.paused?'play':'pause'));}
   // Update counts and icons in place. Never re-sort or replace cards on playback events.
   document.querySelectorAll('.track-card').forEach(card=>{const row=byId(card.dataset.id);if(!row)return;const playing=row.id===currentTrackId&&!audio.paused;card.classList.toggle('playing',row.id===currentTrackId);card.querySelector('.play-count').textContent='×'+(row.playCount||0);const button=card.querySelector('[data-action=play]');button.textContent=playing?'⏸':'▶';button.setAttribute('aria-label',t(playing?'pause':'play')+': '+row.title);});
-  renderQueue();updateTimeline();updateInsets();
+  renderQueue();updateTimeline();inlineSubtitles.render();updateInsets();
 }
 function updateTimeline(){
   const duration=Number.isFinite(audio.duration)?audio.duration:byId(currentTrackId)?.duration||0;
@@ -294,9 +296,9 @@ $('#tracks-list').onclick=guarded(async e=>{
   if(action==='next')nextRequested(target);
   if(action==='delete')await deleteTracks([target]);
   if(action==='play')playRow(target);
-  if(action==='open'){
+  if(action==='open'||action==='text'){
     if(currentTrackId!==target){attachTrack(target);queue.start(currentRows().map(t=>t.id),{...listOptions,startId:target,context:context()});saveQueue()?.catch(reportError);}
-    showPanel('#full-player');
+    showPanel('#full-player');await learning.open();
   }
 });
 $('#folders-list').onclick=guarded(async e=>{
@@ -316,7 +318,9 @@ $('#btn-rename').onclick=guarded(async()=>{const title=$('#track-name-input').va
 $('#btn-edit-folder').onclick=()=>openAssign([editTrackId]);$('#btn-edit-pin').onclick=guarded(()=>toggleProperty(editTrackId,'pinned'));$('#btn-edit-priority').onclick=guarded(()=>toggleProperty(editTrackId,'priority'));$('#btn-edit-next').onclick=()=>nextRequested(editTrackId);
 $('#btn-restart').onclick=()=>{if(confirm(t('restartConfirm'))){if(!queue.state||queue.current!==editTrackId)queue.start(currentRows().map(t=>t.id),{...listOptions,startId:editTrackId,context:context()});attachTrack(editTrackId,{restart:true});startAudio();saveQueue()?.catch(reportError);}};
 $('#btn-delete-track').onclick=guarded(()=>deleteTracks([editTrackId]));$('#btn-player-edit').onclick=()=>openEdit(currentTrackId);
-$('#mini-open').onclick=()=>showPanel('#full-player');$('#btn-mini-play').onclick=togglePlay;$('#btn-play').onclick=togglePlay;$('#btn-close-player').onclick=guarded(()=>closePanel('#full-player'));
+$('#mini-open').onclick=guarded(async()=>{showPanel('#full-player');await learning.open();});
+$('#btn-mini-subtitle').onclick=guarded(async()=>{inlineSubtitles.setHidden(!inlineSubtitles.hidden);updateInsets();await setting('hideMiniSubtitle',inlineSubtitles.hidden);});
+$('#btn-mini-play').onclick=togglePlay;$('#btn-play').onclick=togglePlay;$('#btn-close-player').onclick=guarded(()=>closePanel('#full-player'));
 $('#btn-rewind').onclick=()=>seekTo(audio.currentTime-15);$('#btn-forward').onclick=()=>seekTo(audio.currentTime+15);$('#btn-prev').onclick=()=>advance(-1);$('#btn-next').onclick=()=>advance(1);
 for(const selector of ['#seek-bar','#mini-seek']){
   const input=$(selector);input.onpointerdown=()=>{dragSeek=selector;};input.oninput=()=>{dragSeek=selector;updateTimeline();};
@@ -393,6 +397,7 @@ async function initServiceWorker(){
 }
 async function loadSettings(){
   const settings=new Map((await library.all('settings')).map(row=>[row.id,row.value]));setLanguage(settings.get('language'));
+  inlineSubtitles.setHidden(settings.get('hideMiniSubtitle')===true);
   sortMode=SORT_MODES.includes(settings.get('sort'))?settings.get('sort'):'newest';
   const speed=settings.get('speed');if([0.75,1,1.25,1.5,1.75,2].includes(speed))$('#speed-select').value=String(speed);
   const options=settings.get('listOptions');if(options&&[0,1,2,3].includes(options.total))listOptions={shuffle:options.shuffle===true,total:options.total};
@@ -405,7 +410,7 @@ async function init(){
   try{library=await openLibrary();await refreshLibrary();await loadSettings();setBusy(false);notify(tracks.length?'libraryLoaded':'addHint');storageStatus().catch(reportError);}catch(error){reportError(error);$('#status').textContent+=' '+t('dbFailed');}
   initServiceWorker();
 }
-learning=new LearningPlayer({audio,library:()=>library,getTrack:byId,getBlob:id=>blobs.get(id),notify,reportError,setBusy,openPanel:showPanel,closePanel,seek:seconds=>{if(mediaReady)seekTo(seconds,false);else resumeAt=seconds;},play:startAudio,finishNote:async()=>{await flushNote();if(pendingNote)return false;$('#note-input').blur();hide('#note-area');return true;}});
+learning=new LearningPlayer({onSubtitle:(id,segments,time)=>inlineSubtitles.update(id,segments,time),audio,library:()=>library,getTrack:byId,getBlob:id=>blobs.get(id),notify,reportError,setBusy,openPanel:showPanel,closePanel,seek:seconds=>{if(mediaReady)seekTo(seconds,false);else resumeAt=seconds;},play:startAudio,finishNote:async()=>{await flushNote();if(pendingNote)return false;$('#note-input').blur();hide('#note-area');return true;}});
 phrasebook=new Phrasebook({library:()=>library,currentTrack:()=>currentTrackId,getTrack:byId,patchTrack,openPanel:showPanel,closePanel,reportError,notify,playSegment:async(track,segment)=>{if(currentTrackId!==track)attachTrack(track);showPanel('#full-player');await learning.open();learning.jump(segment,'once');}});
 $('#btn-player-tab').onclick=guarded(async()=>{await flushNote();if(!pendingNote){hide('#note-area');learning.hide();}});
 init();

@@ -882,3 +882,13 @@ body.panel-open { overflow:hidden; }
 #btn-lookup-selection { font-size:12px; min-height:44px; margin:4px 0; }
 
 .text-options summary { min-height:44px; padding:12px 4px; color:var(--accent); cursor:pointer; font-size:14px; }
+
+/* A fixed mini text viewport prevents playback from changing the page inset.
+   Long sentences remain available by scrolling inside it; cards wrap in full. */
+.main-content { overflow-anchor:none; }
+.inline-subtitle { margin-top:12px; padding:12px; border-left:3px solid var(--accent); border-radius:8px; background:var(--accent-soft); }
+.inline-subtitle p { margin:0; font-size:16px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; -webkit-user-select:text; }
+.inline-subtitle .btn-secondary { margin:8px 0 0; }
+.subtitle-toggle { display:block; margin-left:auto; padding:6px 8px; min-height:32px; font-size:12px; color:var(--accent); background:none; border:0; }
+.mini-subtitle { height:4.5em; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; margin:0; padding:0 4px; font-size:14px; line-height:1.5; overflow-wrap:anywhere; color:var(--text); user-select:text; -webkit-user-select:text; }
+@media (max-height:500px) { .mini-subtitle { height:3em; } }

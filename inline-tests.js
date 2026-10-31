@@ -1,0 +1,50 @@
+import {openLibrary} from './db.js';
+import {fingerprint} from './fingerprint.js';
+const output=document.querySelector('#results'),button=document.querySelector('#run'),frame=document.querySelector('iframe');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn){for(let i=0;i<300;i++){if(fn())return;await wait(50);}throw Error('Timed out');}
+let passed=0;function assert(v,label){if(!v)throw Error(label);output.textContent+=`PASS ${++passed}: ${label}\n`;}
+function wave(){const rate=8000,b=new ArrayBuffer(44+rate*4*2),v=new DataView(b),str=(n,s)=>[...s].forEach((c,i)=>v.setUint8(n+i,c.charCodeAt(0)));str(0,'RIFF');v.setUint32(4,b.byteLength-8,true);str(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,b.byteLength-44,true);return new Blob([b],{type:'audio/wav'});}
+button.onclick=async()=>{button.disabled=true;output.textContent='';passed=0;let db;try{
+ if(location.hostname!=='127.0.0.1')throw Error('Run only on a fresh loopback test origin');
+ db=await openLibrary();const existing=await db.all('tracks');if(existing.some(t=>!t.id.startsWith('inline-qa-')))throw Error('Non-test library detected; refusing to modify it');
+ const id='inline-qa-'+crypto.randomUUID(),other='inline-qa-'+crypto.randomUUID(),blob=wave();
+ const track={id,title:'Synthetic inline test',type:'audio/wav',size:blob.size,duration:4,note:'Personal note stays separate',folderIds:[],addedAt:Date.now(),playCount:0};
+ await db.addTrack(track,blob);await db.addTrack({...track,id:other,title:'No transcript test',note:'',addedAt:Date.now()+1},blob);
+ const long='The driver will pick up the load at nine, check the paperwork carefully, and call the dispatcher before leaving the busy loading area.';
+ const row={transcript:{format:'english-flow-transcript',version:1,audio:{sha256:await fingerprint(blob),size:blob.size,duration:4},segments:[{id:'a',start:0,end:1.5,en:'Please check in at the front desk.',ru:'Отметьтесь на стойке регистрации.'},{id:'b',start:1.5,end:4,en:long,ru:'Водитель заберёт груз.'}]},phrases:[{id:'p',segmentId:'a',expression:'check in',meaning:'отметиться',known:true,saved:true}]};await db.putLearning(id,row);
+ frame.src='./index.html';await until(()=>frame.contentDocument?.querySelector(`[data-id="${id}"]`));
+ await until(()=>!frame.contentDocument.querySelector('#btn-add').disabled);
+ let d=frame.contentDocument,a=d.querySelector('#audio'),card=d.querySelector(`[data-id="${id}"]`),q=s=>d.querySelector(s);
+ card.querySelector('[data-action=open]').click();await until(()=>q('#full-player').classList.contains('study-view')&&q('[data-segment="a"]'));
+ assert(!q('#transcript-pane').classList.contains('hidden'),'Opening a track defaults to full bilingual transcript');
+ await until(()=>a.readyState>=1&&card.querySelector('.inline-subtitle p').textContent.includes('Please'));
+ assert(q('#mini-subtitle').textContent.includes('Please'),'Current EN sentence appears in mini player');
+ assert(card.querySelector('.track-note-preview').textContent.includes('Personal note'),'Note remains distinct and intact');
+ q('#btn-close-player').click();await until(()=>q('#full-player').classList.contains('hidden'));
+ const cards=[...d.querySelectorAll('.track-card')],height=q('#player-bar').getBoundingClientRect().height;
+ a.currentTime=2;await until(()=>q('#mini-subtitle').textContent===long);
+ assert(card.querySelector('.inline-subtitle p').textContent===long,'Seek updates full untruncated card sentence');
+ assert(q('#player-bar').getBoundingClientRect().height===height,'Long subtitle leaves mini player height unchanged');
+ assert(d.documentElement.scrollWidth<=375,'375px layout has no horizontal overflow');
+ assert([...d.querySelectorAll('.track-card')].every((el,i)=>el===cards[i]),'Seek preserves exact card DOM nodes and order');
+ assert(d.querySelector(`[data-id="${other}"] .inline-subtitle`).classList.contains('hidden'),'Inactive card contains no foreign subtitle');
+ const rate=q('#speed-select');rate.value='2';rate.dispatchEvent(new Event('change'));await until(()=>a.playbackRate===2);
+ a.currentTime=.1;q('#btn-mini-play').click();await until(()=>!a.paused);await until(()=>q('#mini-subtitle').textContent===long);q('#btn-mini-play').click();await until(()=>a.paused);
+ assert(card.querySelector('.inline-subtitle p').textContent===long,'Real playback at 2x and pause synchronize subtitle');
+ assert([...d.querySelectorAll('.track-card')].every((el,i)=>el===cards[i]),'Play/pause/timeupdate do not rebuild library');
+ q('#btn-mini-subtitle').click();await until(()=>q('#mini-subtitle').classList.contains('hidden'));
+ assert(q('#btn-mini-subtitle').getAttribute('aria-expanded')==='false','Subtitle can be hidden without hiding playback controls');
+ d.querySelector(`[data-id="${other}"] [data-action=open]`).click();await until(()=>q('#full-title').textContent==='No transcript test'&&q('#mini-subtitle').textContent.includes('Текст'));
+ assert(card.querySelector('.inline-subtitle').classList.contains('hidden')&&!card.querySelector('.inline-subtitle p').textContent,'Switching track clears former inline text');
+ assert(!q('#transcript-empty').classList.contains('hidden'),'Missing transcript has honest empty state');
+ q('#btn-close-player').click();await until(()=>q('#full-player').classList.contains('hidden'));
+ card.querySelector('[data-action=open]').click();await until(()=>q('[data-segment="b"]'));
+ assert(q('[data-segment="b"] .sentence-ru').textContent==='Водитель заберёт груз.','Track switch restores correct RU transcript');
+ await wait(150);frame.src='./index.html?reload=1';await until(()=>frame.contentDocument?.querySelector('#mini-subtitle')?.classList.contains('hidden')&&frame.contentDocument?.querySelector(`[data-id="${id}"]`));
+ const snapshot=await db.snapshot(),saved=snapshot.learning.find(r=>r.id===id);
+ assert(saved.phrases[0].saved&&saved.phrases[0].known,'Saved and Known survive reload');
+ assert(snapshot.tracks.find(t=>t.id===id).note===track.note,'Personal note survives reload');
+ assert(await fingerprint(snapshot.audio.find(t=>t.id===id).blob)===row.transcript.audio.sha256,'Audio bytes survive reload unchanged');
+ output.textContent+=`\n${passed}/${passed} passed. Test data retained on this isolated origin.`;
+ }catch(e){output.textContent+='FAIL '+e.stack;}finally{button.disabled=false;db?.db?.close();}};
