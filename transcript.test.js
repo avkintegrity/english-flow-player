@@ -14,3 +14,14 @@ test('Highlight boundaries, gaps, seek positions and bilingual search',()=>{cons
 test('Sentence repeat stops exactly once; loop seeks same interval; clearing restores normal queue behavior',()=>{const d=new SentenceDrill(),s=fixture().segments[0];d.start(s,'once');assert.equal(d.boundary(2),null);assert.deepEqual(d.boundary(3),{pause:true,seek:3});assert.equal(d.boundary(3),null);d.start(s,'loop');assert.deepEqual(d.boundary(3),{seek:0});assert.deepEqual(d.boundary(3),{seek:0});d.clear();assert.equal(d.boundary(20),null);});
 test('Only expressions actually present in their exact source segment are accepted',()=>{const t=fixture();assert.equal(validatePhrases([{expression:'check in',meaning:'отметиться',segmentId:'s1'}],t)[0].time,0);assert.throws(()=>validatePhrases([{expression:'make up',meaning:'',segmentId:'s1'}],t),/transcriptPhraseInvalid/);});
 test('EFP v3 roundtrip retains transcript and phrase links while remapping only track identity',async()=>{const blob=new Blob(['synthetic bytes']);const t={id:'one',title:'Fixture',folderIds:[],playCount:12,note:'preserved',size:blob.size};const learning={id:t.id,transcript:fixture(),phrases:[{id:'p1',expression:'check in',meaning:'отметиться',segmentId:'s1',saved:true,known:true}]};const restored=await readBackup(await createBackup({tracks:[t],audio:[{id:t.id,blob}],folders:[],learning:[learning]}));assert.equal(restored.learning[0].id,restored.tracks[0].id);assert.equal(restored.learning[0].transcript.segments[1].ru,fixture().segments[1].ru);assert.equal(restored.learning[0].phrases[0].known,true);assert.equal(restored.tracks[0].note,'preserved');assert.equal(restored.tracks[0].playCount,12);});
+
+// A rerun may renumber segments; curation must follow source identity.
+test('Re-analysis retains Saved/Known and manual meanings; conflicting edits fail without mutating old data',async()=>{
+ const {preservePhraseWork}=await import('./transcript.js');
+ const old={transcript:{segments:[{id:'old',start:1,en:'Please check in.'}]},phrases:[{id:'p',segmentId:'old',expression:'check in',meaning:'Мой перевод',saved:true,known:true}]};
+ const next={transcript:{segments:[{id:'new',start:1.1,en:'Please check in.'}]},phrases:[{id:'q',segmentId:'new',expression:'check in',meaning:'AI',saved:false}]};
+ const merged=preservePhraseWork(old,next);
+ assert.equal(merged.phrases[0].meaning,'Мой перевод');assert.equal(merged.phrases[0].segmentId,'new');assert.ok(merged.phrases[0].known&&merged.phrases[0].saved);
+ assert.throws(()=>preservePhraseWork(old,{transcript:{segments:[]},phrases:[]}),/transcriptProtected/);
+ assert.equal(old.phrases[0].segmentId,'old');assert.equal(next.phrases[0].meaning,'AI');
+});

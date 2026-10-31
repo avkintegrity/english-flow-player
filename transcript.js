@@ -30,6 +30,23 @@ export function validatePhrases(items,transcript){
  return items.map((item,i)=>{const s=transcript?.segments.find(s=>s.id===item?.segmentId);if(!item||!validText(item.expression,500)||!item.expression.trim()||!validText(item.meaning,3000)||!validText(item.pronunciation||'',500)||!s||!s.en.toLowerCase().includes(item.expression.trim().toLowerCase()))fail('transcriptPhraseInvalid');const id=String(item.id||'p'+i);if(ids.has(id)||id.length>200)fail('transcriptInvalid');ids.add(id);return {id,segmentId:s.id,expression:item.expression.trim(),meaning:item.meaning.trim(),pronunciation:item.pronunciation||'',context:s.en,time:s.start,known:item.known===true,saved:item.saved===true,kind:item.kind==='word'?'word':'phrase'};});
 }
 export function validateLearning(value){if(!value||!value.transcript)fail('transcriptInvalid');const transcript=validateTranscript(value.transcript);return {transcript,phrases:validatePhrases(value.phrases||[],transcript)};}
+
+// Import/re-analysis must not discard the user's dictionary decisions. Match by
+// original time + source quote, not ASR IDs (which may change between runs).
+export function preservePhraseWork(previous,next){
+ if(!previous)return next;
+ const phrases=[...next.phrases];
+ for(const old of previous.phrases||[]){
+  const source=previous.transcript.segments.find(s=>s.id===old.segmentId);
+  const target=next.transcript.segments.find(s=>source&&Math.abs(s.start-source.start)<.5&&s.en.toLowerCase().includes(old.expression.toLowerCase()));
+  if(!target){if(old.saved||old.known)fail('transcriptProtected');continue;}
+  const index=phrases.findIndex(p=>p.segmentId===target.id&&p.expression.toLowerCase()===old.expression.toLowerCase());
+  const retained={...old,segmentId:target.id,context:target.en,time:target.start};
+  if(index>=0)phrases[index]=retained;else phrases.push(retained);
+ }
+ if(phrases.length>2000)fail('transcriptProtected');
+ return {...next,phrases:phrases.map((p,i)=>({...p,id:'p'+i}))};
+}
 // A sentence drill only affects the current media element; it never changes a queue.
 export class SentenceDrill {
  constructor(){this.clear();}
